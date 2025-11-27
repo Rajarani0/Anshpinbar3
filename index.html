@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🚀 XAUUSD Signal Bot - LIVE</title>
+  <style>
+    /* Your CSS as is */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 XAUUSD Signal Bot</h1>
+      <p><strong>LIVE</strong> Engulfing & Pin Bar • Entry + TP/SL • 15m 1h 4h</p>
+    </div>
+
+    <div class="quick-setup">
+      <h3>⚡ QUICK SETUP - Copy & Paste in Console (F12)</h3>
+      <pre id="quickCode">localStorage.setItem('API_KEY', 'your_twelvedata_key');
+localStorage.setItem('TG_TOKEN', 'your_telegram_token');
+localStorage.setItem('CHAT_ID', 'your_chat_id');</pre>
+      <p><small>1. Press F12 → Console → Paste → Enter → 2. Click "Load Keys"</small></p>
+    </div>
+
+    <div class="status">
+      <div class="status-item">
+        <div class="status-value" id="statusRunning">Stopped</div>
+        <div class="status-label">Status</div>
+      </div>
+      <div class="status-item">
+        <div class="status-value" id="totalSignals">0</div>
+        <div class="status-label">Signals</div>
+      </div>
+      <div class="status-item">
+        <div class="status-value" id="buySignals">0</div>
+        <div class="status-label">BUY</div>
+      </div>
+      <div class="status-item">
+        <div class="status-value" id="sellSignals">0</div>
+        <div class="status-label">SELL</div>
+      </div>
+      <div class="status-item">
+        <div class="status-value" id="currentPrice">$0.00</div>
+        <div class="status-label">Price</div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>🔑 TwelveData API Key</label>
+        <input type="password" id="apiKey" placeholder="Enter API Key" />
+        <small>Get FREE: <a href="https://twelvedata.com" target="_blank">twelvedata.com</a></small>
+      </div>
+      <div class="form-group">
+        <label>📱 Telegram Bot Token</label>
+        <input type="password" id="tgToken" placeholder="123456:ABC..." />
+        <small>Create: @BotFather</small>
+      </div>
+      <div class="form-group">
+        <label>💬 Telegram Chat ID</label>
+        <input type="text" id="chatId" placeholder="123456789" />
+        <small>Get: @userinfobot</small>
+      </div>
+      <div class="form-group">
+        <label>⏱️ Check Interval</label>
+        <input type="number" id="interval" value="60" min="30" max="300" />
+        <small>Seconds</small>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>📊 Timeframes</label>
+      <div class="timeframe-selector">
+        <button class="timeframe-btn active" data-tf="15min">15M</button>
+        <button class="timeframe-btn active" data-tf="1h">1H</button>
+        <button class="timeframe-btn active" data-tf="4h">4H</button>
+      </div>
+    </div>
+
+    <div class="control-buttons">
+      <button class="btn-primary" id="loadKeys">🔑 Load Keys</button>
+      <button class="btn-primary" id="testBtn">🧪 Test API</button>
+      <button class="btn-primary" id="startBtn">▶️ START BOT</button>
+      <button class="btn-secondary" id="stopBtn" disabled>⏹️ STOP</button>
+      <button class="btn-danger" id="clearBtn">🗑️ Clear</button>
+    </div>
+
+    <div class="log-container" id="logs">
+      <div class="log-entry success">🚀 XAUUSD Signal Bot LOADED SUCCESSFULLY!</div>
+      <div class="log-entry success">✅ Ready for Engulfing + Pin Bar Detection</div>
+      <div class="log-entry info">💡 Enter API Key → Test API → Start Bot</div>
+    </div>
+  </div>
+
+  <script>
+    class SignalBot {
+      constructor() {
+        this.isRunning = false;
+        this.totalSignals = 0;
+        this.buySignals = 0;
+        this.sellSignals = 0;
+        this.timeframes = ['15min', '1h', '4h'];
+        this.lastSignals = new Map();
+        this.init();
+      }
+
+      init() {
+        this.bindEvents();
+        this.updateStatus();
+        this.log('🤖 Signal Bot Initialized!', 'success');
+      }
+
+      bindEvents() {
+        document.getElementById('loadKeys').onclick = () => this.loadKeys();
+        document.getElementById('testBtn').onclick = () => this.testAPI();
+        document.getElementById('startBtn').onclick = () => this.start();
+        document.getElementById('stopBtn').onclick = () => this.stop();
+        document.getElementById('clearBtn').onclick = () => this.clearLog();
+
+        document.querySelectorAll('.timeframe-btn').forEach(btn => {
+          btn.onclick = (e) => {
+            e.target.classList.toggle('active');
+            const tf = e.target.dataset.tf;
+            const index = this.timeframes.indexOf(tf);
+            if (index > -1) this.timeframes.splice(index, 1);
+            else this.timeframes.push(tf);
+          };
+        });
+      }
+
+      loadKeys() {
+        const api = localStorage.getItem('API_KEY');
+        const tg = localStorage.getItem('TG_TOKEN');
+        const chat = localStorage.getItem('CHAT_ID');
+
+        if (api) {
+          document.getElementById('apiKey').value = api;
+          this.log('✅ API Key loaded!', 'success');
+        }
+        if (tg) document.getElementById('tgToken').value = tg;
+        if (chat) document.getElementById('chatId').value = chat;
+      }
+
+      async testAPI() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        if (!apiKey) {
+          alert('❌ Enter API Key first!');
+          return false;
+        }
+
+        try {
+          this.log('🧪 Testing API...', 'info');
+          const data = await fetch(`https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=15min&outputsize=1&apikey=${apiKey}`);
+          const result = await data.json();
+
+          if (result.values && result.values.length > 0) {
+            const price = parseFloat(result.values[0].close);
+            document.getElementById('currentPrice').textContent = `$${price.toFixed(2)}`;
+            this.log(`✅ API OK! Price: $${price.toFixed(2)}`, 'success');
+            alert(`✅ API WORKING!
+Price: $${price.toFixed(2)}
+Ready to start!`);
+            return true;
+          }
+        } catch (error) {
+          this.log(`❌ API Error: ${error.message}`, 'error');
+          alert('❌ API Error! Check your key.');
+        }
+        return false;
+      }
+
+      isEngulfing(prev, curr) {
+        if (prev.close < prev.open && curr.close > curr.open &&
+            curr.open <= prev.close && curr.close >= prev.open) {
+          return 'BUY';
+        }
+        if (prev.close > prev.open && curr.close < curr.open &&
+            curr.open >= prev.close && curr.close <= prev.open) {
+          return 'SELL';
+        }
+        return null;
+      }
+
+      isPinBar(candle) {
+        const body = Math.abs(candle.close - candle.open);
+        const range = candle.high - candle.low;
+        if (range < 0.1 || body / range > 0.35) return null;
+
+        const upper = candle.high - Math.max(candle.open, candle.close);
+        const lower = Math.min(candle.open, candle.close) - candle.low;
+
+        if (lower >= range * 0.6 && body <= range * 0.35) return 'BUY';
+        if (upper >= range * 0.6 && body <= range * 0.35) return 'SELL';
+        return null;
+      }
+
+      calculateLevels(signal, price, tf) {
+        let tp, sl;
+        const tfMap = { '15min': 0.8, '1h': 1.5, '4h': 2.5 };
+        const dist = tfMap[tf] || 1.2;
+
+        if (signal === 'BUY') {
+          tp = price + dist;
+          sl = price - (dist / 2);
+        } else {
+          tp = price - dist;
+          sl = price + (dist / 2);
+        }
+        return { tp: tp.toFixed(2), sl: sl.toFixed(2), rr: '1:2.0' };
+      }
+
+      async checkSignals() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const tgToken = document.getElementById('tgToken').value.trim();
+        const chatId = document.getElementById('chatId').value.trim();
+
+        for (const tf of this.timeframes) {
+          try {
+            const data = await fetch(
+              `https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=${tf}&outputsize=3&apikey=${apiKey}`
+            );
+            const result = await data.json();
+
+            if (!result.values || result.values.length < 2) continue;
+
+            const candles = result.values.slice(0, 2).reverse();
+            const prev = candles[0];
+            const curr = candles[1];
+
+            const key = `${tf}-${Math.floor(new Date(curr.datetime).getTime() / 300000)}`;
+            if (this.lastSignals.has(key)) continue;
+
+            let signal = this.isEngulfing(prev, curr);
+            if (!signal) signal = this.isPinBar(curr);
+
+            if (signal) {
+              this.lastSignals.set(key, Date.now());
+              const levels = this.calculateLevels(signal, parseFloat(curr.close), tf);
+
+              const signalCard = document.createElement('div');
+              signalCard.className = `log-entry ${signal.toLowerCase()} signal-card`;
+              signalCard.innerHTML = `
+                <strong>🚨 ${signal} SIGNAL (${tf.toUpperCase()})</strong><br>
+                💰 ENTRY: ${curr.close}<br>
+                🎯 TP: ${levels.tp} | 🛑 SL: ${levels.sl}<br>
+                ⚖️ R:R ${levels.rr}
+              `;
+              document.getElementById('logs').insertBefore(signalCard, document.getElementById('logs').firstChild);
+
+              this.totalSignals++;
+              if (signal === 'BUY') this.buySignals++;
+              else this.sellSignals++;
+              this.updateStatus();
+
+              this.log(`${signal} @ ${curr.close} (${tf})`, signal.toLowerCase());
+
+              // Telegram
+              if (tgToken && chatId) {
+                const message = `🚨 XAUUSD ${signal} SIGNAL
+
+📊 Timeframe: ${tf.toUpperCase()}
+💰 Entry: ${curr.close}
+🎯 TP: ${levels.tp}
+🛑 SL: ${levels.sl}
+⚖️ R:R: ${levels.rr}
+
+#XAUUSD #${signal}`;
+
+                await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: 'HTML'
+                  }),
+                });
+                this.log('📱 Telegram SENT!', 'success');
+              }
+            }
+          } catch (e) {
+            this.log(`❌ ${tf}: Error`, 'error');
+          }
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+
+      async start() {
+        const testOk = await this.testAPI();
+        if (!testOk) return;
+
+        this.isRunning = true;
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('testBtn').disabled = true;
+
+        this.log('🚀 BOT STARTED!', 'success');
+        await this.checkSignals();
+
+        const interval = parseInt(document.getElementById('interval').value) * 1000;
+        this.signalInterval = setInterval(() => this.checkSignals(), interval);
+      }
+
+      stop() {
+        this.isRunning = false;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('testBtn').disabled = false;
+        clearInterval(this.signalInterval);
+        this.log('⏹️ Bot STOPPED', 'info');
+      }
+
+      updateStatus() {
+        document.getElementById('statusRunning').textContent = this.isRunning ? '🟢 LIVE' : '🔴 STOPPED';
+        document.getElementById('totalSignals').textContent = this.totalSignals;
+        document.getElementById('buySignals').textContent = this.buySignals;
+        document.getElementById('sellSignals').textContent = this.sellSignals;
+      }
+
+      log(msg, type = 'info') {
+        const logs = document.getElementById('logs');
+        const div = document.createElement('div');
+        div.className = `log-entry ${type}`;
+        div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logs.insertBefore(div, logs.firstChild);
+
+        if (logs.children.length > 100) {
+          logs.removeChild(logs.lastChild);
+        }
+        logs.scrollTop = 0;
+      }
+
+      clearLog() {
+        document.getElementById('logs').innerHTML =
+          '<div class="log-entry success">🧹 Log cleared!</div>';
+      }
+    }
+
+    let bot;
+    document.addEventListener('DOMContentLoaded', () => {
+      bot = new SignalBot();
+
+      document.getElementById('quickCode').textContent =
+        `localStorage.setItem('API_KEY', 'YOUR_TWELVEDATA_KEY');
+localStorage.setItem('TG_TOKEN', 'YOUR_TELEGRAM_TOKEN');
+localStorage.setItem('CHAT_ID', 'YOUR_CHAT_ID');`;
+    });
+  </script>
+</body>
+</html>
